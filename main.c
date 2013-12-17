@@ -25,22 +25,44 @@
 static sqlite3 *db = NULL;
 
 enum flags {
-	FLAG_EMPTY			= 0x00,
-	FLAG_CHECK_HTMLMAILONLY		= 0x01,
-	FLAG_CHECK_NEWSENDERSONLY	= 0x02,
-	FLAG_CHECK_BLONLY		= 0x04,
-	FLAG_DRY			= 0x10,
+	FLAG_EMPTY		= 0x0000,
+	FLAG_CHECK_NEWSENDER	= 0x0001,
+	FLAG_CHECK_SPF		= 0x0002,
+	FLAG_DRY		= 0x0100,
 };
 typedef enum flags flags_t;
+
+enum spf_status {
+	SPF_UNKNOWN = 0,
+	SPF_NONE,
+	SPF_PASS,
+	SPF_NEUTRAL,
+	SPF_SOFTFAIL,
+	SPF_FAIL,
+};
+typedef enum spf_status spf_status_t;
+
 static flags_t flags = FLAG_EMPTY;
 
 static int todomains_limit = 3;
+static int threshold_badscore = 20;
+
+static int badscore_domainlimit    = 10;
+static int badscore_newsender      = 10;
+static int badscore_htmlmail       = 10;
+static int badscore_blacklisted    = 10;
+static int badscore_frommismatched = 10;
+static int badscore_spf_none       =  5;
+static int badscore_spf_softfail   = 10;
+static int badscore_spf_fail       = 20;
 
 struct private {
 	char			*mailfrom;
 	char 			 mailfrom_isnew;
 	char			 sender_blacklisted;
+	char			 from_mismatched;
 	char			 body_hashtml;
+	spf_status_t		 spf;
 	int 			 todomains;
 	struct hsearch_data 	 todomain_htab;
 #ifdef HASH_ALLOC
@@ -190,17 +212,17 @@ void mailfrom_free() {
 
 // === Code ===
 
-extern sfsistat tockmilter_cleanup(SMFICTX *, bool);
+extern sfsistat lastmilter_cleanup(SMFICTX *, bool);
 
-sfsistat tockmilter_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr) {
+sfsistat lastmilter_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr) {
 	private_t *private_p = calloc(1, sizeof(private_t));
 	if(private_p == NULL) {
-		syslog(LOG_NOTICE, "tockmilter_connect(): Cannot allocate memory. Exit.\n");
+		syslog(LOG_NOTICE, "lastmilter_connect(): Cannot allocate memory. Exit.\n");
 		exit(EX_SOFTWARE);
 	}
 
 	if(!hcreate_r(MAX_RECIPIENTS+2, &private_p->todomain_htab)) {
-		syslog(LOG_NOTICE, "tockmilter_connect(): Failure on hcreate_r(). Exit.\n");
+		syslog(LOG_NOTICE, "lastmilter_connect(): Failure on hcreate_r(). Exit.\n");
 		exit(EX_SOFTWARE);
 	}
 
@@ -209,18 +231,18 @@ sfsistat tockmilter_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr) 
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_helo(SMFICTX *ctx, char *helohost) {
+sfsistat lastmilter_helo(SMFICTX *ctx, char *helohost) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_envfrom(SMFICTX *ctx, char **argv) {
+sfsistat lastmilter_envfrom(SMFICTX *ctx, char **argv) {
 
 	if(argv[0] == NULL) {
-		syslog(LOG_NOTICE, "%s: tockmilter_envfrom(): argv[0]==NULL. Sending TEMPFAIL.\n", smfi_getsymval(ctx, "i"));
+		syslog(LOG_NOTICE, "%s: lastmilter_envfrom(): argv[0]==NULL. Sending TEMPFAIL.\n", smfi_getsymval(ctx, "i"));
 		return R(SMFIS_TEMPFAIL);
 	}
 	if(*argv[0] == 0) {
-		syslog(LOG_NOTICE, "%s: tockmilter_envfrom(): *argv[0]==0. Sending TEMPFAIL.\n", smfi_getsymval(ctx, "i"));
+		syslog(LOG_NOTICE, "%s: lastmilter_envfrom(): *argv[0]==0. Sending TEMPFAIL.\n", smfi_getsymval(ctx, "i"));
 		return R(SMFIS_TEMPFAIL);
 	}
 
@@ -232,22 +254,22 @@ sfsistat tockmilter_envfrom(SMFICTX *ctx, char **argv) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_envrcpt(SMFICTX *ctx, char **argv) {
+sfsistat lastmilter_envrcpt(SMFICTX *ctx, char **argv) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
-//	syslog(LOG_NOTICE, "%s: tockmilter_header(): \"%s\": \"%s\".\n", smfi_getsymval(ctx, "i"), headerf, _headerv);
+sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
+//	syslog(LOG_NOTICE, "%s: lastmilter_header(): \"%s\": \"%s\".\n", smfi_getsymval(ctx, "i"), headerf, _headerv);
 
 	if(!strcasecmp(headerf, "To")) {
 
 		private_t *private_p = smfi_getpriv(ctx);
 		if(private_p == NULL) {
-			syslog(LOG_NOTICE, "%s: tockmilter_header(): private_p == NULL. Skipping.\n", smfi_getsymval(ctx, "i"));
+			syslog(LOG_NOTICE, "%s: lastmilter_header(): private_p == NULL. Skipping.\n", smfi_getsymval(ctx, "i"));
 			return SMFIS_CONTINUE;
 		}
 
-		if(flags & FLAG_CHECK_NEWSENDERSONLY) 
+		if(flags & FLAG_CHECK_NEWSENDER) 
 			if(!private_p->mailfrom_isnew)
 				return SMFIS_CONTINUE;
 
@@ -276,7 +298,7 @@ sfsistat tockmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 			memcpy(domain, at, domainend-at);
 			domain[domainend-at] = 0;
 
-			syslog(LOG_NOTICE, "%s: tockmilter_header(): todomain: %s.\n", smfi_getsymval(ctx, "i"), domain);
+			syslog(LOG_NOTICE, "%s: lastmilter_header(): todomain: %s.\n", smfi_getsymval(ctx, "i"), domain);
 
 			ENTRY entry, *ret;
 
@@ -298,36 +320,70 @@ sfsistat tockmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 		} while(private_p->todomains < MAX_RECIPIENTS);
 		free(headerv);
 	} else
+
+	// Blacklists
 	if(!strcasecmp(headerf, "X-DNSBL-MILTER")) {
 		private_t *private_p = smfi_getpriv(ctx);
-		if(!strcasecmp(_headerv, "Blacklisted")) {
+		if(!strcasecmp(_headerv, "Blacklisted"))
 			private_p->sender_blacklisted = 1;
-		}
-		syslog(LOG_NOTICE, "%s: tockmilter_header(): Found DNSBL header value: %s. Blacklisted: %u.\n",
+
+		syslog(LOG_NOTICE, "%s: lastmilter_header(): Found DNSBL header value: %s. Blacklisted: %u.\n",
 			smfi_getsymval(ctx, "i"), _headerv, private_p->sender_blacklisted);
+	} else
+
+	// MAILFROM !~ From
+	if(!strcasecmp(headerf, "X-FromChk-Milter-MailFrom")) {
+		private_t *private_p = smfi_getpriv(ctx);
+		if(!strcasecmp(_headerv, "mismatch"))
+			private_p->from_mismatched = 1;
+
+		syslog(LOG_NOTICE, "%s: lastmilter_header(): Found FromChkMilter MailFrom header value: %s. Mismatched: %u.\n",
+			smfi_getsymval(ctx, "i"), _headerv, private_p->from_mismatched);
+	}
+
+	// SPF
+	if(!strcasecmp(headerf, "Received-SPF")) {
+		private_t *private_p = smfi_getpriv(ctx);
+		if(!strncasecmp(_headerv, "none", 4))
+			private_p->spf = SPF_NONE;
+		else
+		if(!strncasecmp(_headerv, "fail", 4))
+			private_p->spf = SPF_FAIL;
+		else
+		if(!strncasecmp(_headerv, "softfail", 8))
+			private_p->spf = SPF_SOFTFAIL;
+		else
+		if(!strncasecmp(_headerv, "permerror", 9))
+			private_p->spf = SPF_SOFTFAIL;
+		else
+		if(!strncasecmp(_headerv, "neutral", 7))
+			private_p->spf = SPF_PASS;
+		else
+		if(!strncasecmp(_headerv, "pass", 4))
+			private_p->spf = SPF_PASS;
+		else
+			private_p->spf = SPF_PASS;
+
+		syslog(LOG_NOTICE, "%s: lastmilter_header(): Found SPF header value: %s. status: %u.\n",
+			smfi_getsymval(ctx, "i"), _headerv, private_p->spf);
 	}
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_eoh(SMFICTX *ctx) {
+sfsistat lastmilter_eoh(SMFICTX *ctx) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_body(SMFICTX *ctx, unsigned char *bodyp, size_t bodylen) {
-	if(!(flags & FLAG_CHECK_HTMLMAILONLY))
-		return SMFIS_CONTINUE;
-
-//	syslog(LOG_NOTICE, "%s: tockmilter_body(): \"%s\".\n", smfi_getsymval(ctx, "i"), bodyp);
-
+sfsistat lastmilter_body(SMFICTX *ctx, unsigned char *bodyp, size_t bodylen) {
 	private_t *private_p = smfi_getpriv(ctx);
 	if(strstr((char *)bodyp, "\nContent-Type: text/html")) {
 		private_p->body_hashtml = 1;
-		syslog(LOG_NOTICE, "%s: tockmilter_body(): Seems, that here's HTML included.\n", smfi_getsymval(ctx, "i"));
+		syslog(LOG_NOTICE, "%s: lastmilter_body(): Seems, that here's HTML included.\n", smfi_getsymval(ctx, "i"));
 	}
 	return SMFIS_CONTINUE;
 }
 
-static inline int tockmilter_eom_ok(SMFICTX *ctx, private_t *private_p) {
+static inline int lastmilter_eom_ok(SMFICTX *ctx, private_t *private_p) {
 	smfi_addheader(ctx, "X-ToChk-Milter", "passed");
 	if(private_p->mailfrom_isnew)
 		mailfrom_add(private_p->mailfrom);
@@ -336,45 +392,69 @@ static inline int tockmilter_eom_ok(SMFICTX *ctx, private_t *private_p) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_eom(SMFICTX *ctx) {
+sfsistat lastmilter_eom(SMFICTX *ctx) {
 	private_t *private_p = smfi_getpriv(ctx);
 	if(private_p == NULL) {
-		syslog(LOG_NOTICE, "%s: tockmilter_eom(): private_p == NULL. Skipping.\n", smfi_getsymval(ctx, "i"));
+		syslog(LOG_NOTICE, "%s: lastmilter_eom(): private_p == NULL. Skipping.\n", smfi_getsymval(ctx, "i"));
 		return SMFIS_CONTINUE;
 	}
 
-	syslog(LOG_NOTICE, "%s: tockmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u.\n", 
-		smfi_getsymval(ctx, "i"), private_p->mailfrom_isnew, private_p->todomains, private_p->body_hashtml, private_p->sender_blacklisted);
+	int badscore=0;
 
-	if(flags & FLAG_CHECK_NEWSENDERSONLY) 
-		if(!private_p->mailfrom_isnew) 
-			return tockmilter_eom_ok(ctx, private_p);
+	if(flags & FLAG_CHECK_NEWSENDER)
+		if(private_p->mailfrom_isnew)
+			badscore += badscore_newsender;
 
-	if(flags & FLAG_CHECK_HTMLMAILONLY)
-		if(!private_p->body_hashtml)
-			return tockmilter_eom_ok(ctx, private_p);
+	if(private_p->body_hashtml)
+		badscore += badscore_htmlmail;
 
-	if(flags & FLAG_CHECK_BLONLY)
-		if(!private_p->sender_blacklisted)
-			return tockmilter_eom_ok(ctx, private_p);
+	if(private_p->sender_blacklisted)
+		badscore += badscore_blacklisted;
+
+	if(private_p->from_mismatched)
+		badscore += badscore_frommismatched;
 
 	if(private_p->todomains > todomains_limit) {
-		syslog(LOG_NOTICE, "%s: tockmilter_eom(): Too many domains in \"To\" field: %u > %u. Sending SMFIS_REJECT.\n", 
+		syslog(LOG_NOTICE, "%s: lastmilter_eom(): Too many domains in \"To\" field: %u > %u. Sending SMFIS_REJECT.\n", 
 			smfi_getsymval(ctx, "i"), private_p->todomains, todomains_limit);
-		return R(SMFIS_REJECT);
+		badscore += badscore_domainlimit;
 	}
 
-	return tockmilter_eom_ok(ctx, private_p);
+	if(flags&FLAG_CHECK_SPF) {
+		switch(private_p->spf) {
+			case SPF_NONE:
+				badscore += badscore_spf_none;
+				break;
+			case SPF_SOFTFAIL:
+				badscore += badscore_spf_softfail;
+				break;
+			case SPF_FAIL:
+				badscore += badscore_spf_fail;
+				break;
+			case SPF_PASS:
+			case SPF_UNKNOWN:
+			default:
+				break;
+		}
+	}
+
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u. Bad-score == %u.\n", 
+		smfi_getsymval(ctx, "i"), private_p->mailfrom_isnew, private_p->todomains, private_p->body_hashtml, private_p->sender_blacklisted, private_p->from_mismatched, private_p->spf, badscore);
+
+	if(badscore > threshold_badscore)
+		return R(SMFIS_REJECT);
+	else
+		return lastmilter_eom_ok(ctx, private_p);
 }
 
-sfsistat tockmilter_abort(SMFICTX *ctx) {
+sfsistat lastmilter_abort(SMFICTX *ctx) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_close(SMFICTX *ctx) {
+sfsistat lastmilter_close(SMFICTX *ctx) {
 	private_t *private_p = smfi_getpriv(ctx);
 	if(private_p == NULL) {
-		syslog(LOG_NOTICE, "%s: tockmilter_close(): private_p == NULL. Skipping.\n", smfi_getsymval(ctx, "i"));
+		syslog(LOG_NOTICE, "%s: lastmilter_close(): private_p == NULL. Skipping.\n", smfi_getsymval(ctx, "i"));
 		return SMFIS_CONTINUE;
 	}
 
@@ -391,15 +471,15 @@ sfsistat tockmilter_close(SMFICTX *ctx) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_unknown(SMFICTX *ctx, const char *cmd) {
+sfsistat lastmilter_unknown(SMFICTX *ctx, const char *cmd) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_data(SMFICTX *ctx) {
+sfsistat lastmilter_data(SMFICTX *ctx) {
 	return SMFIS_CONTINUE;
 }
 
-sfsistat tockmilter_negotiate(ctx, f0, f1, f2, f3, pf0, pf1, pf2, pf3)
+sfsistat lastmilter_negotiate(ctx, f0, f1, f2, f3, pf0, pf1, pf2, pf3)
 	SMFICTX *ctx;
 	unsigned long f0;
 	unsigned long f1;
@@ -423,24 +503,24 @@ int main(int argc, char *argv[]) {
 		"ToCheckMilter",		// filter name
 		SMFI_VERSION,			// version code -- do not change
 		SMFIF_ADDHDRS|SMFIF_ADDRCPT,	// flags
-		tockmilter_connect,		// connection info filter
-		tockmilter_helo,		// SMTP HELO command filter
-		tockmilter_envfrom,		// envelope sender filter
-		tockmilter_envrcpt,		// envelope recipient filter
-		tockmilter_header,		// header filter
-		tockmilter_eoh,			// end of header
-		tockmilter_body,		// body block filter
-		tockmilter_eom,			// end of message
-		tockmilter_abort,		// message aborted
-		tockmilter_close,		// connection cleanup
-		tockmilter_unknown,		// unknown SMTP commands
-		tockmilter_data,		// DATA command
-		tockmilter_negotiate		// Once, at the start of each SMTP connection
+		lastmilter_connect,		// connection info filter
+		lastmilter_helo,		// SMTP HELO command filter
+		lastmilter_envfrom,		// envelope sender filter
+		lastmilter_envrcpt,		// envelope recipient filter
+		lastmilter_header,		// header filter
+		lastmilter_eoh,			// end of header
+		lastmilter_body,		// body block filter
+		lastmilter_eom,			// end of message
+		lastmilter_abort,		// message aborted
+		lastmilter_close,		// connection cleanup
+		lastmilter_unknown,		// unknown SMTP commands
+		lastmilter_data,		// DATA command
+		lastmilter_negotiate		// Once, at the start of each SMTP connection
 	};
 
 	char setconn = 0;
 	int c;
-	const char *args = "p:t:hHdN:L:B";
+	const char *args = "p:t:hHdN:L:BMO";
 	extern char *optarg;
 	// Process command line options
 	while ((c = getopt(argc, argv, args)) != -1) {
@@ -481,10 +561,19 @@ int main(int argc, char *argv[]) {
 				flags |= FLAG_DRY;
 				break;
 			case 'H':
-				flags |= FLAG_CHECK_HTMLMAILONLY;
+				badscore_htmlmail       = atoi(optarg);
 				break;
 			case 'B':
-				flags |= FLAG_CHECK_BLONLY;
+				badscore_blacklisted    = atoi(optarg);
+				break;
+			case 'M':
+				badscore_frommismatched = atoi(optarg);
+				break;
+			case 'S':
+				flags |= FLAG_CHECK_SPF;
+				break;
+			case 'T':
+				threshold_badscore = atoi(optarg);
 				break;
 			case 'N':
                                 // Openning the DB
@@ -507,6 +596,7 @@ int main(int argc, char *argv[]) {
 					sqlite3_exec(db, "CREATE INDEX dom_idx ON tocheckmilter_mailfrom (dom)", NULL, NULL, NULL);
 				}
 				sqlite3_finalize(stmt);
+				flags |= FLAG_CHECK_NEWSENDER;
 				break;
 			case 'l':
 				todomains_limit = atoi(optarg);
@@ -517,6 +607,7 @@ int main(int argc, char *argv[]) {
 				exit(EX_USAGE);
 		}
 	}
+
 	if(!setconn) {
 		fprintf(stderr, "%s: Missing required -p argument\n", argv[0]);
 		usage(argv[0]);

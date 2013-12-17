@@ -9,15 +9,15 @@ main.o\
 
 
 all: $(objs)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(objs) -o to-check-milter
+	$(CC) $(CFLAGS) $(LDFLAGS) $(objs) -o lastmilter
 
 %.o: %.c
 	$(CC) -std=gnu11 $(CFLAGS) $(INCFLAGS) $< -c -o $@
 
 debug:
-	$(CC) -std=gnu11 $(DEBUGCFLAGS) $(INCFLAGS) $(LDFLAGS) main.c -o to-check-milter-debug
+	$(CC) -std=gnu11 $(DEBUGCFLAGS) $(INCFLAGS) $(LDFLAGS) main.c -o lastmilter-debug
 
 clean:
-	rm -f to-check-milter to-check-milter-debug $(objs)
+	rm -f lastmilter lastmilter-debug $(objs)
 
 

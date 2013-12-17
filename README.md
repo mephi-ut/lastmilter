@@ -1,7 +1,11 @@
-tocheckmilter
+lastmilter
 ===============
 
-Disallows mail with too many domains in "To" field.
+This milter have get score based on:
+ - Other milters results
+ - Domain limit exhaustion in "To" field
+
+And then mail will be rejected or accepted based on this score
 
 Any questions?
  - IRC: ircs://irc.campus.mephi.ru/#mephi,xai,xaionaro
@@ -14,10 +18,22 @@ options
  - -p /path/to/unix/socket - path to unix socket to communicate with MTA.
  - -t timeout - timeout in seconds of communicating with MTA.
  - -l limit - limit of domains in "To" field
- - -H - check only HTML-like letters (with "\nContent-Type: text/html" in body)
- - -N - check mail only from new senders (in "MAIL FROM")
+[bad-score: less or equal: 0; greater: 10]
+ - -H score - score to add to "bad-score" if letter is HTML-like
+(with "\nContent-Type: text/html" in body) [default: 10]
+ - -N /path/to/db - add 10 bad-score points if mail from new sender
+(in "MAIL FROM"). "/path/to/db" will be used to save SQLite3 DB with
+senders table.
  - -d - dry run (don't reject mail)
- - -B - check mail from blacklisted senders only (blacklisting status is
-detected by "X-DNSBL-MILTER" header value left by [dnsbl-milter](https://github.com/hloeung/dnsbl-milter "dnsbl-milter"))
+ - -M score - score to add to "bad-score" in case of unsimilar "MAIL FROM" and
+"From" (similarity status is detected by "X-FromChk-Milter-MailFrom" header
+value left by [fromcheckmilter](https://github.com/mephi-ut/fromcheckmilter "fromcheckmilter"))
+[default: 10]
+ - -B score - score to add to "bad-score" if sender is blacklisted
+(blacklisting status is detected by "X-DNSBL-MILTER" header value
+left by [dnsbl-milter](https://github.com/hloeung/dnsbl-milter "dnsbl-milter")) [default: 10]
+ - -S - check SPF header "Received-SPF" [bad-score: passed: 0; none: 5;
+softfail: 10; fail: 20]
+ - -T threshold - total "bad-score" threshold for passing mail [default: 20]
  - -h - help
 
