@@ -384,7 +384,7 @@ sfsistat lastmilter_body(SMFICTX *ctx, unsigned char *bodyp, size_t bodylen) {
 }
 
 static inline int lastmilter_eom_ok(SMFICTX *ctx, private_t *private_p) {
-	smfi_addheader(ctx, "X-ToChk-Milter", "passed");
+	smfi_addheader(ctx, "X-LastMilter", "passed");
 	if(private_p->mailfrom_isnew)
 		mailfrom_add(private_p->mailfrom);
 	else

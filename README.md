@@ -1,11 +1,13 @@
 lastmilter
-===============
+==========
 
 This milter have get score based on:
  - Other milters results
+ - HTML-letter or not
+ - Unknown sender (never been met before)
  - Domain limit exhaustion in "To" field
 
-And then mail will be rejected or accepted based on this score
+And then mail will be rejected or accepted based on this score.
 
 Any questions?
  - IRC: ircs://irc.campus.mephi.ru/#mephi,xai,xaionaro
