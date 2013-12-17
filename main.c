@@ -500,7 +500,7 @@ static void usage(const char *path) {
 
 int main(int argc, char *argv[]) {
 	struct smfiDesc mailfilterdesc = {
-		"ToCheckMilter",		// filter name
+		"TheLastMilter",		// filter name
 		SMFI_VERSION,			// version code -- do not change
 		SMFIF_ADDHDRS|SMFIF_ADDRCPT,	// flags
 		lastmilter_connect,		// connection info filter
