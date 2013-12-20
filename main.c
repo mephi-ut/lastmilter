@@ -415,7 +415,7 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		badscore += badscore_frommismatched;
 
 	if(private_p->todomains > todomains_limit) {
-		syslog(LOG_NOTICE, "%s: lastmilter_eom(): Too many domains in \"To\" field: %u > %u. Sending SMFIS_REJECT.\n", 
+		syslog(LOG_NOTICE, "%s: lastmilter_eom(): Too many domains in \"To\" field: %u > %u.\n", 
 			smfi_getsymval(ctx, "i"), private_p->todomains, todomains_limit);
 		badscore += badscore_domainlimit;
 	}
@@ -438,8 +438,8 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		}
 	}
 
-	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u. Bad-score == %u.\n", 
-		smfi_getsymval(ctx, "i"), private_p->mailfrom_isnew, private_p->todomains, private_p->body_hashtml, private_p->sender_blacklisted, private_p->from_mismatched, private_p->spf, badscore);
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u. Bad-score == %u.%s\n", 
+		smfi_getsymval(ctx, "i"), private_p->mailfrom_isnew, private_p->todomains, private_p->body_hashtml, private_p->sender_blacklisted, private_p->from_mismatched, private_p->spf, badscore, (badscore > threshold_badscore) ? " Sending REJECT." : "");
 
 	if(badscore > threshold_badscore)
 		return R(SMFIS_REJECT);
