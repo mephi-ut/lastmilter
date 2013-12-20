@@ -39,3 +39,16 @@ softfail: 10; fail: 20]
  - -T threshold - total "bad-score" threshold for passing mail [default: 20]
  - -h - help
 
+
+example
+-------
+
+    lastmilter_header(): todomain: ukr.net.
+    lastmilter_header(): todomain: mtu-net.ru.
+    lastmilter_header(): todomain: bigmir.net.
+    lastmilter_header(): todomain: xxxxx.xx.
+    lastmilter_header(): Found DNSBL header value: Blacklisted. Blacklisted: 1.
+    lastmilter_header(): Found FromChkMilter MailFrom header value: passed. Mismatched: 0.
+    lastmilter_body(): Seems, that here's HTML included.
+    lastmilter_eom(): Too many domains in "To" field: 4 > 3. Sending SMFIS_REJECT. lastmilter_eom(): Total: mailfrom_isnew == 1; to_domains == 4, body_hashtml == 1, sender_blacklisted == 1, from_mismatched == 0, spf == 0. Bad-score == 40.
+    milter-reject: END-OF-MESSAGE from frontend02n.mail.kz[92.46.53.17]: 5.7.1 Command rejected; from=<ssk2000@mail.kz> to=<xxxxxx@xxxxx.xx> proto=ESMTP helo=<mail.kz>
