@@ -27,6 +27,7 @@ options
 (in "MAIL FROM"). "/path/to/db" will be used to save SQLite3 DB with
 senders table.
  - -d - dry run (don't reject mail)
+ - -Q - don't add header "X-LastMilter"
  - -M score - score to add to "bad-score" in case of unsimilar "MAIL FROM" and
 "From" (similarity status is detected by "X-FromChk-Milter-MailFrom" header
 value left by [fromcheckmilter](https://github.com/mephi-ut/fromcheckmilter "fromcheckmilter"))

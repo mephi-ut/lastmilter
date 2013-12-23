@@ -29,6 +29,7 @@ enum flags {
 	FLAG_CHECK_NEWSENDER	= 0x0001,
 	FLAG_CHECK_SPF		= 0x0002,
 	FLAG_DRY		= 0x0100,
+	FLAG_DONTADDHEADER	= 0x0200,
 };
 typedef enum flags flags_t;
 
@@ -384,7 +385,9 @@ sfsistat lastmilter_body(SMFICTX *ctx, unsigned char *bodyp, size_t bodylen) {
 }
 
 static inline int lastmilter_eom_ok(SMFICTX *ctx, private_t *private_p) {
-	smfi_addheader(ctx, "X-LastMilter", "passed");
+	if(!(flags & FLAG_DONTADDHEADER))
+		smfi_addheader(ctx, "X-LastMilter", "passed");
+
 	if(private_p->mailfrom_isnew)
 		mailfrom_add(private_p->mailfrom);
 	else
@@ -520,7 +523,7 @@ int main(int argc, char *argv[]) {
 
 	char setconn = 0;
 	int c;
-	const char *args = "p:t:hHdN:L:BMO";
+	const char *args = "p:t:hHdN:L:BMOQ";
 	extern char *optarg;
 	// Process command line options
 	while ((c = getopt(argc, argv, args)) != -1) {
@@ -568,6 +571,9 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'M':
 				badscore_frommismatched = atoi(optarg);
+				break;
+			case 'Q':
+				flags |= FLAG_DONTADDHEADER;
 				break;
 			case 'S':
 				flags |= FLAG_CHECK_SPF;
