@@ -16,8 +16,6 @@
 #include <sqlite3.h>
 #include <pthread.h>
 
-#define HASH_ALLOC
-
 #define MAX_RECIPIENTS 		100
 #define MAX_KNOWNSENDERS	(1 << 20)
 
@@ -67,9 +65,7 @@ struct private {
 	spf_status_t		 spf;
 	int 			 todomains;
 	struct hsearch_data 	 todomain_htab;
-#ifdef HASH_ALLOC
 	char			*todomain[MAX_RECIPIENTS];
-#endif
 
 	int			 badscore;
 };
@@ -78,22 +74,16 @@ typedef struct private private_t;
 static struct hsearch_data mailfrom_htab={0};
 static pthread_mutex_t mailfrom_mutex;
 
-#ifdef HASH_ALLOC
 static int   mailfroms = 0;
 static char *mailfrom[MAX_KNOWNSENDERS];
-#endif
 
 #define R(a) (flags&FLAG_DRY ? SMFIS_CONTINUE : a)
 
 // === SQLite3 routines ===
 
 void mailfrom_htab_add(const char const *mailfrom_in) {
-#ifdef HASH_ALLOC
 	char *mailfrom_cur = strdup(mailfrom_in);
 	mailfrom[mailfroms++] = mailfrom_cur;
-#else
-	char *mailfrom_cur = *mailfrom_in;
-#endif
 
 	ENTRY entry, *ret;
 	entry.key  = (char *)mailfrom_cur;
@@ -207,10 +197,8 @@ int mailfrom_chk(const char const *mailfrom) {
 void mailfrom_free() {
 	hdestroy_r(&mailfrom_htab);
 
-#ifdef HASH_ALLOC
 	while(mailfroms--)
 		free(mailfrom[mailfroms]);
-#endif
 	return;
 }
 
@@ -289,11 +277,7 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 			if(domainend == NULL)
 				break;
 
-#ifdef HASH_ALLOC
 			char *domain = malloc(domainend - at + 9);
-#else
-			char *domain = alloca(domainend - at + 9);
-#endif
 			memcpy(domain, at, domainend-at);
 			domain[domainend-at] = 0;
 
@@ -308,14 +292,9 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 
 			if(ret == NULL) {
 				hsearch_r(entry, ENTER, &ret, &private_p->todomain_htab);
-#ifndef HASH_ALLOC
-				private_p->todomains++;
-			}
-#else
 				private_p->todomain[private_p->todomains++] = domain;
 			} else
 				free(domain);
-#endif
 		} while(private_p->todomains < MAX_RECIPIENTS);
 		free(headerv);
 	} else
@@ -472,11 +451,9 @@ sfsistat lastmilter_close(SMFICTX *ctx) {
 	}
 
 	hdestroy_r(&private_p->todomain_htab);
-#ifdef HASH_ALLOC
 	while(private_p->todomains--) {
 		free(private_p->todomain[private_p->todomains]);
 	}
-#endif
 	free(private_p->mailfrom);
 	free(private_p);
 	smfi_setpriv(ctx, NULL);
