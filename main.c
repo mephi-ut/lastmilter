@@ -505,7 +505,7 @@ sfsistat lastmilter_negotiate(ctx, f0, f1, f2, f3, pf0, pf1, pf2, pf3)
 }
 
 static void usage(const char *path) {
-	fprintf(stderr, "Usage: %s -p socket-addr [-t timeout] [-L domain limit] [-N /path/to/sqlite/db] [-HdB]\n",
+	fprintf(stderr, "Usage: %s -p socket-addr [-t timeout] [-L domain limit] [-T bad-score threshold] [-H html bad-score] [-B blacklist bad-score] [-M MAIL FROM <> From mismatch bad-score] [-N /path/to/sqlite/db] [-HdBQS]\n",
 		path);
 }
 
@@ -531,7 +531,7 @@ int main(int argc, char *argv[]) {
 
 	char setconn = 0;
 	int c;
-	const char *args = "p:t:hHdN:L:BMOQ";
+	const char *args = "p:t:hHdN:L:BMOQS";
 	extern char *optarg;
 	// Process command line options
 	while ((c = getopt(argc, argv, args)) != -1) {
