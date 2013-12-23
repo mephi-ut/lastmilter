@@ -69,6 +69,8 @@ struct private {
 #ifdef HASH_ALLOC
 	char			*todomain[MAX_RECIPIENTS];
 #endif
+
+	int			 badscore;
 };
 typedef struct private private_t;
 
@@ -385,8 +387,12 @@ sfsistat lastmilter_body(SMFICTX *ctx, unsigned char *bodyp, size_t bodylen) {
 }
 
 static inline int lastmilter_eom_ok(SMFICTX *ctx, private_t *private_p) {
-	if(!(flags & FLAG_DONTADDHEADER))
+	if(!(flags & FLAG_DONTADDHEADER)) {
+		char buf[BUFSIZ];
+		sprintf(buf, "%i", private_p->badscore);
 		smfi_addheader(ctx, "X-LastMilter", "passed");
+		smfi_addheader(ctx, "X-LastMilter-Score", buf);
+	}
 
 	if(private_p->mailfrom_isnew)
 		mailfrom_add(private_p->mailfrom);
@@ -440,6 +446,8 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 				break;
 		}
 	}
+
+	private_p->badscore = badscore;
 
 	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u. Bad-score == %u.%s\n", 
 		smfi_getsymval(ctx, "i"), private_p->mailfrom_isnew, private_p->todomains, private_p->body_hashtml, private_p->sender_blacklisted, private_p->from_mismatched, private_p->spf, badscore, (badscore > threshold_badscore) ? " Sending REJECT." : "");
