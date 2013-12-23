@@ -20,7 +20,7 @@ options
  - -p /path/to/unix/socket - path to unix socket to communicate with MTA.
  - -t timeout - timeout in seconds of communicating with MTA.
  - -l limit - limit of domains in "To" field
-[bad-score: less or equal: 0; greater: 10]
+[bad-score: less or equal: 0; greater: 10] \[default: 4]
  - -H score - score to add to "bad-score" if letter is HTML-like
 (with "\nContent-Type: text/html" in body) [default: 10]
  - -N /path/to/db - add 10 bad-score points if mail from new sender

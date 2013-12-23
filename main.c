@@ -43,7 +43,7 @@ typedef enum spf_status spf_status_t;
 
 static flags_t flags = FLAG_EMPTY;
 
-static int todomains_limit = 3;
+static int todomains_limit = 4;
 static int threshold_badscore = 30;
 
 static int badscore_domainlimit    = 10;
