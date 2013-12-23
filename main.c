@@ -263,19 +263,14 @@ sfsistat lastmilter_envrcpt(SMFICTX *ctx, char **argv) {
 }
 
 sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
-//	syslog(LOG_NOTICE, "%s: lastmilter_header(): \"%s\": \"%s\".\n", smfi_getsymval(ctx, "i"), headerf, _headerv);
-
 	if(!strcasecmp(headerf, "To")) {
+		syslog(LOG_NOTICE, "%s: lastmilter_header(): \"%s\": \"%s\".\n", smfi_getsymval(ctx, "i"), headerf, _headerv);
 
 		private_t *private_p = smfi_getpriv(ctx);
 		if(private_p == NULL) {
 			syslog(LOG_NOTICE, "%s: lastmilter_header(): private_p == NULL. Skipping.\n", smfi_getsymval(ctx, "i"));
 			return SMFIS_CONTINUE;
 		}
-
-		if(flags & FLAG_CHECK_NEWSENDER) 
-			if(!private_p->mailfrom_isnew)
-				return SMFIS_CONTINUE;
 
 		char *at_saveptr = NULL;
 		char *headerv = strdup(_headerv);
