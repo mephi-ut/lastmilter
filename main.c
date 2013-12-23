@@ -262,10 +262,10 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 
 		char *at_saveptr = NULL;
 		char *headerv = strdup(_headerv);
-		strtok_r(headerv, "@", &at_saveptr);
+		char *at = strtok_r(headerv, "@", &at_saveptr);	// Skipping the first part ["blah-blah@bleh-bleh, blah-blah@bleh-blah"]
+								//                           _________
 		do {
-
-			char *at = strtok_r(NULL, "@", &at_saveptr);
+			at = strtok_r(NULL, "@", &at_saveptr);
 
 			if(at == NULL)
 				break;
@@ -275,7 +275,7 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 			char *domainend = strtok_r(NULL, " \n\t)(<>@,;:\"/[]?=", &domainend_saveptr);
 
 			if(domainend == NULL)
-				break;
+				domainend = &at[strlen(at)];
 
 			char *domain = malloc(domainend - at + 9);
 			memcpy(domain, at, domainend-at);
@@ -295,6 +295,7 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 				private_p->todomain[private_p->todomains++] = domain;
 			} else
 				free(domain);
+
 		} while(private_p->todomains < MAX_RECIPIENTS);
 		free(headerv);
 	} else
