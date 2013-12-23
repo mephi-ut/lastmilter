@@ -55,7 +55,8 @@ static int badscore_blacklisted    = 10;
 static int badscore_frommismatched = 10;
 static int badscore_spf_none       =  5;
 static int badscore_spf_softfail   = 10;
-static int badscore_spf_fail       = 20;
+static int badscore_spf_fail       = 25;
+static int badscore_noto           = 25;
 
 struct private {
 	char			*mailfrom;
@@ -429,6 +430,12 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		badscore += badscore_domainlimit;
 	}
 
+	if(private_p->todomains == 0) {
+		syslog(LOG_NOTICE, "%s: lastmilter_eom(): No \"To\". Adding %u to the bad-score.\n", 
+			smfi_getsymval(ctx, "i"), badscore_noto);
+		badscore += badscore_noto;
+	}
+
 	if(flags&FLAG_CHECK_SPF) {
 		switch(private_p->spf) {
 			case SPF_NONE:
@@ -531,7 +538,7 @@ int main(int argc, char *argv[]) {
 
 	char setconn = 0;
 	int c;
-	const char *args = "p:t:hHdN:L:BMOQS";
+	const char *args = "p:t:hHdN:A:BMOQST:l:";
 	extern char *optarg;
 	// Process command line options
 	while ((c = getopt(argc, argv, args)) != -1) {
@@ -614,6 +621,9 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'l':
 				todomains_limit = atoi(optarg);
+				break;
+			case 'A':
+				badscore_noto = atoi(optarg);
 				break;
 			case 'h':
 			default:
