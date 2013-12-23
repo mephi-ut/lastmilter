@@ -523,7 +523,7 @@ int main(int argc, char *argv[]) {
 
 	char setconn = 0;
 	int c;
-	const char *args = "p:t:hHdN:L:BMOQ";
+	const char *args = "p:t:hHdN:L:BMOQS";
 	extern char *optarg;
 	// Process command line options
 	while ((c = getopt(argc, argv, args)) != -1) {
