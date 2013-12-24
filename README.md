@@ -22,7 +22,7 @@ options
  - -l limit - limit of domains in "To" field
 [bad-score: less or equal: 0; greater: 10] \[default: 4]
  - -H score - score to add to "bad-score" if letter is HTML-like
-(with "\nContent-Type: text/html" in body) [default: 10]
+(with "\nContent-Type: text/html" in the body) [default: 10]
  - -N /path/to/db - add 10 bad-score points if mail from new sender
 (in "MAIL FROM"). "/path/to/db" will be used to save SQLite3 DB with
 senders table.
