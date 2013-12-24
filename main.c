@@ -49,10 +49,10 @@ static int threshold_badscore = 30;
 static int badscore_domainlimit    = 10;
 static int badscore_newsender      = 10;
 static int badscore_htmlmail       = 10;
-static int badscore_blacklisted    = 10;
+static int badscore_blacklisted    = 15;
 static int badscore_frommismatched = 10;
 static int badscore_spf_none       =  5;
-static int badscore_spf_softfail   = 10;
+static int badscore_spf_softfail   = 15;
 static int badscore_spf_fail       = 25;
 static int badscore_noto           = 25;
 
