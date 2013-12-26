@@ -35,7 +35,7 @@ value left by [fromcheckmilter](https://github.com/mephi-ut/fromcheckmilter "fro
  - -B score - score to add to "bad-score" if sender is blacklisted
 (blacklisting status is detected by "X-DNSBL-MILTER" header value
 left by [dnsbl-milter](https://github.com/hloeung/dnsbl-milter "dnsbl-milter")) [default: 15]
- - -A score - score to add to "bad-score" in case of no "To" field absence
+ - -A score - score to add to "bad-score" in case of "To" field absence
 [default: 25]
  - -S - check SPF header "Received-SPF" [bad-score: passed: 0; none: 5;
 softfail: 15; fail: 25]
