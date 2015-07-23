@@ -26,10 +26,18 @@ enum flags {
 	FLAG_EMPTY		= 0x0000,
 	FLAG_CHECK_NEWSENDER	= 0x0001,
 	FLAG_CHECK_SPF		= 0x0002,
+	FLAG_CHECK_DKIM		= 0x0004,
 	FLAG_DRY		= 0x0100,
 	FLAG_DONTADDHEADER	= 0x0200,
 };
 typedef enum flags flags_t;
+
+enum dkim_status {
+	DKIM_NONE = 0,
+	DKIM_PASS,
+	DKIM_FAIL,
+};
+typedef enum dkim_status dkim_status_t;
 
 enum spf_status {
 	SPF_UNKNOWN = 0,
@@ -54,6 +62,8 @@ static int badscore_frommismatched = 10;
 static int badscore_spf_none       =  5;
 static int badscore_spf_softfail   = 15;
 static int badscore_spf_fail       = 25;
+static int badscore_dkim_none      =  5;
+static int badscore_dkim_fail      = 20;
 static int badscore_noto           = 25;
 
 struct private {
@@ -63,6 +73,7 @@ struct private {
 	char			 from_mismatched;
 	char			 body_hashtml;
 	spf_status_t		 spf;
+	dkim_status_t		 dkim;
 	int 			 todomains;
 	struct hsearch_data 	 todomain_htab;
 	char			*todomain[MAX_RECIPIENTS];
@@ -318,7 +329,20 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 
 		syslog(LOG_NOTICE, "%s: lastmilter_header(): Found FromChkMilter MailFrom header value: %s. Mismatched: %u.\n",
 			smfi_getsymval(ctx, "i"), _headerv, private_p->from_mismatched);
-	}
+	} else
+
+	// DKIM
+	if(!strcasecmp(headerf, "Authentication-Results")) {
+		private_t *private_p = smfi_getpriv(ctx);
+		if(!strstr(_headerv, "dkim=fail"))
+			private_p->dkim = DKIM_FAIL;
+		else
+		if(!strstr(_headerv, "dkim=pass"))
+			private_p->dkim = DKIM_PASS;
+
+		syslog(LOG_NOTICE, "%s: lastmilter_header(): Found DKIM header value: %s. status: %u.\n",
+			smfi_getsymval(ctx, "i"), _headerv, private_p->dkim);
+	} else
 
 	// SPF
 	if(!strcasecmp(headerf, "Received-SPF")) {
@@ -409,6 +433,20 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		syslog(LOG_NOTICE, "%s: lastmilter_eom(): No \"To\". Adding %u to the bad-score.\n", 
 			smfi_getsymval(ctx, "i"), badscore_noto);
 		badscore += badscore_noto;
+	}
+
+	if(flags&FLAG_CHECK_DKIM) {
+		switch(private_p->spf) {
+			case DKIM_NONE:
+				badscore += badscore_dkim_none;
+				break;
+			case DKIM_FAIL:
+				badscore += badscore_dkim_fail;
+				break;
+			case DKIM_PASS:
+			default:
+				break;
+		}
 	}
 
 	if(flags&FLAG_CHECK_SPF) {
@@ -511,7 +549,7 @@ int main(int argc, char *argv[]) {
 
 	char setconn = 0;
 	int c;
-	const char *args = "p:t:hHdN:A:BMOQST:l:";
+	const char *args = "p:t:hHdN:A:BMOQSDT:l:";
 	extern char *optarg;
 	// Process command line options
 	while ((c = getopt(argc, argv, args)) != -1) {
@@ -565,6 +603,9 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'S':
 				flags |= FLAG_CHECK_SPF;
+				break;
+			case 'D':
+				flags |= FLAG_CHECK_DKIM;
 				break;
 			case 'T':
 				threshold_badscore = atoi(optarg);
