@@ -34,8 +34,8 @@ typedef enum flags flags_t;
 
 enum dkim_status {
 	DKIM_NONE = 0,
-	DKIM_PASS,
-	DKIM_FAIL,
+	DKIM_PASS = 1,
+	DKIM_FAIL = 2,
 };
 typedef enum dkim_status dkim_status_t;
 
@@ -334,14 +334,16 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 	// DKIM
 	if(!strcasecmp(headerf, "Authentication-Results")) {
 		private_t *private_p = smfi_getpriv(ctx);
-		if(!strstr(_headerv, "dkim=fail"))
-			private_p->dkim = DKIM_FAIL;
-		else
-		if(!strstr(_headerv, "dkim=pass"))
-			private_p->dkim = DKIM_PASS;
+		if (private_p->dkim == DKIM_NONE) {
+			if(strstr(_headerv, "dkim=fail"))
+				private_p->dkim = DKIM_FAIL;
+			else
+			if(strstr(_headerv, "dkim=pass"))
+				private_p->dkim = DKIM_PASS;
 
-		syslog(LOG_NOTICE, "%s: lastmilter_header(): Found DKIM header value: %s. status: %u.\n",
-			smfi_getsymval(ctx, "i"), _headerv, private_p->dkim);
+			syslog(LOG_NOTICE, "%s: lastmilter_header(): Found DKIM header value: %s. status: %u.\n",
+				smfi_getsymval(ctx, "i"), _headerv, private_p->dkim);
+		}
 	} else
 
 	// SPF
@@ -435,8 +437,11 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		badscore += badscore_noto;
 	}
 
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Base checks complete. Total: %u.\n", 
+		smfi_getsymval(ctx, "i"), badscore);
+
 	if(flags&FLAG_CHECK_DKIM) {
-		switch(private_p->spf) {
+		switch(private_p->dkim) {
 			case DKIM_NONE:
 				badscore += badscore_dkim_none;
 				break;
@@ -448,6 +453,9 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 				break;
 		}
 	}
+
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): DKIM complete. Total: %u.\n", 
+		smfi_getsymval(ctx, "i"), badscore);
 
 	if(flags&FLAG_CHECK_SPF) {
 		switch(private_p->spf) {
@@ -467,10 +475,13 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		}
 	}
 
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): SPF complete. Total: %u.\n", 
+		smfi_getsymval(ctx, "i"), badscore);
+
 	private_p->badscore = badscore;
 
-	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u. Bad-score == %u.%s\n", 
-		smfi_getsymval(ctx, "i"), private_p->mailfrom_isnew, private_p->todomains, private_p->body_hashtml, private_p->sender_blacklisted, private_p->from_mismatched, private_p->spf, badscore, (badscore > threshold_badscore) ? " Sending REJECT." : "");
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u, dkim == %u. Bad-score == %u.%s\n", 
+		smfi_getsymval(ctx, "i"), private_p->mailfrom_isnew, private_p->todomains, private_p->body_hashtml, private_p->sender_blacklisted, private_p->from_mismatched, private_p->spf, private_p->dkim, badscore, (badscore > threshold_badscore) ? " Sending REJECT." : "");
 
 	if(badscore > threshold_badscore)
 		return R(SMFIS_REJECT);
