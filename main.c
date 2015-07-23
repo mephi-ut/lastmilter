@@ -251,7 +251,7 @@ sfsistat lastmilter_envrcpt(SMFICTX *ctx, char **argv) {
 }
 
 sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
-	if(!strcasecmp(headerf, "To")) {
+	if(!strcasecmp(headerf, "To") || !strcasecmp(headerf, "Cc")) {
 		syslog(LOG_NOTICE, "%s: lastmilter_header(): \"%s\": \"%s\".\n", smfi_getsymval(ctx, "i"), headerf, _headerv);
 
 		private_t *private_p = smfi_getpriv(ctx);
