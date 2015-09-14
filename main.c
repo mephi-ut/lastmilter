@@ -27,6 +27,7 @@ enum flags {
 	FLAG_CHECK_NEWSENDER	= 0x0001,
 	FLAG_CHECK_SPF		= 0x0002,
 	FLAG_CHECK_DKIM		= 0x0004,
+	FLAG_CHECK_REGEX	= 0x0008,
 	FLAG_DRY		= 0x0100,
 	FLAG_DONTADDHEADER	= 0x0200,
 };
@@ -49,6 +50,17 @@ enum spf_status {
 };
 typedef enum spf_status spf_status_t;
 
+enum regex_status {
+	REGEX_UNKNOWN = 0,
+	REGEX_ACCEPT,
+	REGEX_NONE,
+	REGEX_TEMPFAIL,
+	REGEX_QUARANTINE,
+	REGEX_REJECT,
+	REGEX_DISCARD,
+};
+typedef enum regex_status regex_status_t;
+
 static flags_t flags = FLAG_EMPTY;
 
 static int todomains_limit = 4;
@@ -66,6 +78,13 @@ static int badscore_dkim_none      =  5;
 static int badscore_dkim_fail      = 20;
 static int badscore_noto           = 25;
 
+static int badscore_regex_accept     = -30;
+static int badscore_regex_none       =   0;
+static int badscore_regex_tempfail   =   5;
+static int badscore_regex_quarantine =  10;
+static int badscore_regex_reject     =  20;
+static int badscore_regex_discard    =  30;
+
 struct private {
 	char			*mailfrom;
 	char 			 mailfrom_isnew;
@@ -74,6 +93,7 @@ struct private {
 	char			 body_hashtml;
 	spf_status_t		 spf;
 	dkim_status_t		 dkim;
+	regex_status_t		 regex;
 	int 			 todomains;
 	struct hsearch_data 	 todomain_htab;
 	char			*todomain[MAX_RECIPIENTS];
@@ -372,6 +392,31 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 		syslog(LOG_NOTICE, "%s: lastmilter_header(): Found SPF header value: %s. status: %u.\n",
 			smfi_getsymval(ctx, "i"), _headerv, private_p->spf);
 	}
+
+	// regex
+	if(!strcasecmp(headerf, "X-MILTER-REGEX")) {
+		private_t *private_p = smfi_getpriv(ctx);
+		if(!strncasecmp(_headerv, "Accept", 6))
+			private_p->regex = REGEX_ACCEPT;
+		else
+		if(!strncasecmp(_headerv, "Tempfail", 8))
+			private_p->regex = REGEX_TEMPFAIL;
+		else
+		if(!strncasecmp(_headerv, "Quarantine", 10))
+			private_p->regex = REGEX_QUARANTINE;
+		else
+		if(!strncasecmp(_headerv, "Reject", 6))
+			private_p->regex = REGEX_REJECT;
+		else
+		if(!strncasecmp(_headerv, "Discard", 7))
+			private_p->regex = REGEX_DISCARD;
+		else
+			private_p->regex = REGEX_NONE;
+
+		syslog(LOG_NOTICE, "%s: lastmilter_header(): Found X-MILTER-REGEX header value: %s. status: %u.\n",
+			smfi_getsymval(ctx, "i"), _headerv, private_p->regex);
+	}
+
 	return SMFIS_CONTINUE;
 }
 
@@ -478,6 +523,34 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 	syslog(LOG_NOTICE, "%s: lastmilter_eom(): SPF complete. Total: %u.\n", 
 		smfi_getsymval(ctx, "i"), badscore);
 
+	if(flags&FLAG_CHECK_REGEX) {
+		switch(private_p->regex) {
+			case REGEX_ACCEPT:
+				badscore += badscore_regex_accept;
+				break;
+			case REGEX_NONE:
+				badscore += badscore_regex_none;
+				break;
+			case REGEX_TEMPFAIL:
+				badscore += badscore_regex_tempfail;
+				break;
+			case REGEX_QUARANTINE:
+				badscore += badscore_regex_quarantine;
+				break;
+			case REGEX_REJECT:
+				badscore += badscore_regex_reject;
+				break;
+			case REGEX_DISCARD:
+				badscore += badscore_regex_discard;
+				break;
+			default:
+				break;
+		}
+	}
+
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): regex complete. Total: %u.\n", 
+		smfi_getsymval(ctx, "i"), badscore);
+
 	private_p->badscore = badscore;
 
 	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u, dkim == %u. Bad-score == %u.%s\n", 
@@ -560,7 +633,7 @@ int main(int argc, char *argv[]) {
 
 	char setconn = 0;
 	int c;
-	const char *args = "p:t:hHdN:A:BMOQSDT:l:";
+	const char *args = "p:t:hHdN:A:BMOQSDRT:l:";
 	extern char *optarg;
 	// Process command line options
 	while ((c = getopt(argc, argv, args)) != -1) {
@@ -617,6 +690,9 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'D':
 				flags |= FLAG_CHECK_DKIM;
+				break;
+			case 'R':
+				flags |= FLAG_CHECK_REGEX;
 				break;
 			case 'T':
 				threshold_badscore = atoi(optarg);

@@ -40,6 +40,7 @@ left by [dnsbl-milter](https://github.com/hloeung/dnsbl-milter "dnsbl-milter")) 
  - -S - check SPF header "Received-SPF" [bad-score: passed: 0; none: 5;
 softfail: 15; fail: 25]
  - -D - check DKIM header "Authentication-Results" [bad-scode: passed: 0; none: 5; fail: 20]
+ - -R - check Milter-Regex header "X-MILTER-REGEX" [bad-score: accept: -30; none: 0; tempfail: 5; quarantine: 10; reject: 20; discard: 30]
  - -T threshold - total "bad-score" threshold for passing mail [default: 30]
  - -h - help
 
