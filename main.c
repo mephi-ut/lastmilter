@@ -487,7 +487,7 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		badscore += badscore_noto;
 	}
 
-	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Base checks complete. Total: %u.\n", 
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Base checks complete. Total: %i.\n",
 		smfi_getsymval(ctx, "i"), badscore);
 
 	if(flags&FLAG_CHECK_DKIM) {
@@ -504,7 +504,7 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		}
 	}
 
-	syslog(LOG_NOTICE, "%s: lastmilter_eom(): DKIM complete. Total: %u.\n", 
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): DKIM complete. Total: %i.\n",
 		smfi_getsymval(ctx, "i"), badscore);
 
 	if(flags&FLAG_CHECK_SPF) {
@@ -525,7 +525,7 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		}
 	}
 
-	syslog(LOG_NOTICE, "%s: lastmilter_eom(): SPF complete. Total: %u.\n", 
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): SPF complete. Total: %i.\n",
 		smfi_getsymval(ctx, "i"), badscore);
 
 	if(flags&FLAG_CHECK_REGEX) {
@@ -553,12 +553,12 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		}
 	}
 
-	syslog(LOG_NOTICE, "%s: lastmilter_eom(): regex complete. Total: %u.\n", 
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): regex complete. Total: %i.\n",
 		smfi_getsymval(ctx, "i"), badscore);
 
 	private_p->badscore = badscore;
 
-	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u, dkim == %u. Bad-score == %u.%s\n", 
+	syslog(LOG_NOTICE, "%s: lastmilter_eom(): Total: mailfrom_isnew == %u; to_domains == %u, body_hashtml == %u, sender_blacklisted == %u, from_mismatched == %u, spf == %u, dkim == %u. Bad-score == %i.%s\n",
 		smfi_getsymval(ctx, "i"), private_p->mailfrom_isnew, private_p->todomains, private_p->body_hashtml, private_p->sender_blacklisted, private_p->from_mismatched, private_p->spf, private_p->dkim, badscore, (badscore > threshold_badscore) ? " Sending REJECT." : "");
 
 	if(badscore > threshold_badscore)
