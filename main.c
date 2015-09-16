@@ -249,6 +249,11 @@ sfsistat lastmilter_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr) 
 		exit(EX_SOFTWARE);
 	}
 
+	syslog(LOG_NOTICE, "lastmilter_connect(): Connection from: %s.\n", hostname);
+	if (!strcmp(hostname, "lists.ut.mephi.ru")) {
+		private_p->badscore = -20;
+	}
+
 	smfi_setpriv(ctx, private_p);
 
 	return SMFIS_CONTINUE;
@@ -455,7 +460,7 @@ sfsistat lastmilter_eom(SMFICTX *ctx) {
 		return SMFIS_CONTINUE;
 	}
 
-	int badscore=0;
+	int badscore=private_p->badscore;
 
 	if(flags & FLAG_CHECK_NEWSENDER)
 		if(private_p->mailfrom_isnew)
