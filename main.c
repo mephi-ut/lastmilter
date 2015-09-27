@@ -78,7 +78,7 @@ static int badscore_dkim_none      =  5;
 static int badscore_dkim_fail      = 20;
 static int badscore_noto           = 25;
 
-static int badscore_regex_accept     = -30;
+static int badscore_regex_accept     =   0;
 static int badscore_regex_none       =   0;
 static int badscore_regex_tempfail   =   5;
 static int badscore_regex_quarantine =  10;
