@@ -78,6 +78,8 @@ static int badscore_dkim_none      =  5;
 static int badscore_dkim_fail      = 20;
 static int badscore_noto           = 25;
 
+static int badscore_whitelisted    = -20;
+
 static int badscore_regex_accept     =   0;
 static int badscore_regex_none       =   0;
 static int badscore_regex_tempfail   =   5;
@@ -97,6 +99,7 @@ struct private {
 	int 			 todomains;
 	struct hsearch_data 	 todomain_htab;
 	char			*todomain[MAX_RECIPIENTS];
+	int			 whitelisted;
 
 	int			 badscore;
 };
@@ -251,7 +254,10 @@ sfsistat lastmilter_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr) 
 
 	syslog(LOG_NOTICE, "lastmilter_connect(): Connection from: %s.\n", hostname);
 	if (!strcmp(hostname, "lists.ut.mephi.ru")) {
-		private_p->badscore = -20;
+		private_p->badscore = badscore_whitelisted;
+	} else
+	if (!strcmp(hostname, "mail-edge.mephi.ru")) {
+		private_p->badscore = badscore_whitelisted;
 	}
 
 	smfi_setpriv(ctx, private_p);
