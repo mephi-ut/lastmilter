@@ -78,7 +78,7 @@ static int badscore_dkim_none      =  5;
 static int badscore_dkim_fail      = 20;
 static int badscore_noto           = 25;
 
-static int badscore_whitelisted    = -20;
+static int badscore_whitelisted    = -30;
 
 static int badscore_regex_accept     =   0;
 static int badscore_regex_none       =   0;
@@ -253,10 +253,13 @@ sfsistat lastmilter_connect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *hostaddr) 
 	}
 
 	syslog(LOG_NOTICE, "lastmilter_connect(): Connection from: %s.\n", hostname);
-	if (!strcmp(hostname, "lists.ut.mephi.ru")) {
+	if (!strcasecmp(hostname, "lists.ut.mephi.ru")) {
 		private_p->badscore = badscore_whitelisted;
 	} else
-	if (!strcmp(hostname, "mail-edge.mephi.ru")) {
+	if (!strcasecmp(hostname, "lists.mephi.ru")) {
+		private_p->badscore = badscore_whitelisted;
+	} else
+	if (!strcasecmp(hostname, "mail-edge.mephi.ru")) {
 		private_p->badscore = badscore_whitelisted;
 	}
 
@@ -331,6 +334,11 @@ sfsistat lastmilter_header(SMFICTX *ctx, char *headerf, char *_headerv) {
 			entry.data = (void *)1;
 
 			hsearch_r(entry, FIND, &ret, &private_p->todomain_htab);
+
+			if (!strcasecmp(domain, "mephi.ru")) {
+				syslog(LOG_NOTICE, "%s: lastmilter_header(): whitelisted todomain: %s.\n", smfi_getsymval(ctx, "i"), domain);
+				private_p->badscore = badscore_whitelisted;
+			}
 
 			if(ret == NULL) {
 				hsearch_r(entry, ENTER, &ret, &private_p->todomain_htab);
